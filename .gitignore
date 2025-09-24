@@ -1,0 +1,16 @@
+*.dll
+*.exe
+*.pdb
+*.nonadmin
+*.txt
+etc/
+DLLs/
+include/
+Lib/
+Library/
+libs/
+opt/
+Scripts/
+share/
+Tools/
+conda-meta/
