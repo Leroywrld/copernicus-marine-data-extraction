@@ -3,6 +3,7 @@
 *.pdb
 *.nonadmin
 *.txt
+!requirements.txt
 etc/
 DLLs/
 include/
