@@ -1,6 +1,15 @@
 import copernicusmarine
 ##import xarray as xr
 ##import rioxarray as rxr
+import psycopg2
+import os
+
+#Database Connection
+DB_NAME = "db_name"
+DB_USER = "user"
+DB_PASS = "db_password"
+DB_HOST = "host"
+DB_PORT = "port"
 
 ## a dictionary to assign each dataset's ID to a list of variables of interest
 dataset_dict = {
@@ -30,31 +39,61 @@ subsetting_dict = {
     'maximum_depth': 21.598816,
     'start_datetime': '2025/1/1',
     'end_datetime': '2025/1/2', ## you can change the start and end dates to subset data over long periods of time
-    'output_directory': 'C:\\Users\\ADMIN\\marine\\cmes_extraction\\data' ## output folder is specified here
+    'output_directory": "C:\\Users\\Bill\\copernicus_data' ## output folder is specified here
 }
 
 ## a function that generates informative file names necessary during file storage
-def generate_filename(dataset_name_dict:dict, dataset_id:str, start_date:str, end_date:str):
-    start_date = start_date.replace('/', '')
-    end_date = end_date.replace('/', '')
-    filename = "{0}_kenyaeez_{1}_{2}".format(dataset_name_dict[dataset_id], start_date, end_date)
-    return filename
+def generate_filename(dataset_id):
+    start_date = subsetting_dict["start_datetime"].replace("/", "")
+    end_date = subsetting_dict["end_datetime"].replace("/", "")
+    return f"{dataset_name_dict[dataset_id]}_kenyaeez_{start_date}_{end_date}.nc"
 
-## a loop that iterates over the keys (dataset IDs) and values (variable lists) to subset data
-## from copernicusmarine accordingly for each dataset ID
-for dataset_id, variable_list in dataset_dict.items():
-    filename = generate_filename(dataset_name_dict=dataset_name_dict, dataset_id=dataset_id, start_date=subsetting_dict['start_datetime'], end_date=subsetting_dict['end_datetime'])
-    copernicusmarine.subset(dataset_id=dataset_id,
-                            variables=variable_list,
-                            minimum_longitude=subsetting_dict['minimum_longitude'],
-                            maximum_longitude=subsetting_dict['maximum_longitude'],
-                            minimum_latitude=subsetting_dict['minimum_latitude'],
-                            maximum_latitude=subsetting_dict['maximum_latitude'],
-                            minimum_depth=subsetting_dict['minimum_depth'],
-                            maximum_depth=subsetting_dict['maximum_depth'],
-                            start_datetime=subsetting_dict['start_datetime'],
-                            end_datetime=subsetting_dict['end_datetime'],
-                            output_directory=subsetting_dict['output_directory'],
-                            output_filename=filename,
-                            dry_run=True ##if set to False the data will download to specified folder
-                            )
+def download_and_insert():
+    conn = psycopg2.connect(
+        dbname=DB_NAME, user=DB_USER, password=DB_PASS,
+        host=DB_HOST, port=DB_PORT
+    )
+    cursor = conn.cursor()
+
+    for dataset_id, variables in dataset_dict.items():
+        filename = generate_filename(dataset_id)
+        filepath = os.path.join(subsetting_dict["output_directory"], filename)
+
+        print(f"📥 Downloading {dataset_name_dict[dataset_id]}...")
+        copernicusmarine.subset(
+            dataset_id=dataset_id,
+            variables=variables,
+            minimum_longitude=subsetting_dict["minimum_longitude"],
+            maximum_longitude=subsetting_dict["maximum_longitude"],
+            minimum_latitude=subsetting_dict["minimum_latitude"],
+            maximum_latitude=subsetting_dict["maximum_latitude"],
+            minimum_depth=subsetting_dict["minimum_depth"],
+            maximum_depth=subsetting_dict["maximum_depth"],
+            start_datetime=subsetting_dict["start_datetime"],
+            end_datetime=subsetting_dict["end_datetime"],
+            output_directory=subsetting_dict["output_directory"],
+            output_filename=filename
+        )
+
+        print(f"Processing {filepath}...")
+        ds = xr.open_dataset(filepath)
+        df = ds.to_dataframe().reset_index()
+
+        table_name = dataset_name_dict[dataset_id]
+
+        for var in variables:
+            for _, row in df.iterrows():
+                cursor.execute(
+                    f"""INSERT INTO {table_name} (time, depth, latitude, longitude, variable, value)
+                        VALUES (%s, %s, %s, %s, %s, %s)""",
+                    (row["time"], row.get("depth", 0), row["latitude"], row["longitude"], var, row[var])
+                )
+
+        conn.commit()
+        print(f" Inserted {dataset_name_dict[dataset_id]} into {table_name} table.")
+
+    cursor.close()
+    conn.close()
+
+if __name__ == "__main__":
+    download_and_insert()
