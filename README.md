@@ -1,2 +1,2 @@
 ## Welcome Aboard!
-This small project involves a simple script that enables the simultaneous pulling of various datasets from Copernicus Marine Environment Monitoring Service (CMES) based on defined spatial and temporal constraints.
+This small project involves a simple script that enables the simultaneous pulling of various datasets (nutrients, planktons, sea salinity, sea surface height, and sea surface temperature) from Copernicus Marine Environment Monitoring Service (CMES) based on defined spatial and temporal constraints.
